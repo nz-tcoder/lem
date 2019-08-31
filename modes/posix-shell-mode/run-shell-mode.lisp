@@ -17,6 +17,8 @@
 (defvar *completion-timer* nil)
 (defvar *completion-timeout* 200)
 
+(defvar *assert* nil)
+
 (define-major-mode run-shell-mode ()
     (:name "Run shell"
      :keymap *run-shell-mode-keymap*)
@@ -44,9 +46,6 @@
   (let ((buffer (make-buffer *buffer-name*)))
     (change-buffer-mode buffer 'run-shell-mode)
     buffer))
-
-(defvar *debug* nil)
-(defvar *assert* nil)
 
 (defun insert-result (string)
   (let* ((already-exists (repl-buffer-exists-p))
@@ -110,7 +109,6 @@
 (defun output-callback (string)
   (let ((output (ppcre:regex-replace-all "\\r\\n" string
                                          (string #\newline))))
-    (push output *debug*)
     (cond ((and *command* (not (ppcre:scan "\\n" output))) ; buffered
            (push output *echo-buffer*))
           ((null *command*)  ; command result
@@ -129,30 +127,6 @@
              (setq *echo-buffer* nil
                    *command* nil)
              (complete/insert rest))))))
-
-#|
-    (let ((output-string (ppcre:regex-replace-all  "\\r\\n" string (string #\newline))))
-      (multiple-value-bind (drop-echo has-echo)
-          (if command
-              (ppcre:regex-replace (format nil "^~a~%" command) output-string "")
-              (values output-string nil))
-        ;; debug
-        (push (list command string drop-echo) *debug*)
-        (if has-echo
-            (setq command nil))
-        (if completion-p
-            (let ((items (butlast (ppcre:split "\\n" drop-echo))))
-              (when items
-                (setq completion-p nil)
-                (lem.completion-mode:run-completion
-                 #'(lambda (point)
-                     (declare (ignore point))
-                     (mapcar #'(lambda (completion)
-                                 (lem.completion-mode:make-completion-item :label completion :detail ""
-                                                                           :start start-point :end end-point))
-                             items)))))
-            (insert-result drop-echo))))))
-|#
 
 (defun run-shell-internal ()
   (unless (alive-process-p)
