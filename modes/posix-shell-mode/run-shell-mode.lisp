@@ -1,12 +1,16 @@
+
 (defpackage :lem-run-shell-mode
   (:use :cl :lem)
-  (:export :run-shell))
+  (:export :run-shell
+           :*shell-name*))
 
 (in-package :lem-run-shell-mode)
 
 (defvar *process* nil)
 (defvar *buffer-name* "*shell*")
-(defvar *shell-command* '("bash" "--posix"))
+(defvar *shell-name* "bash")
+(defvar *enable-complete* nil)
+(defvar *shell-command* nil)
 (defvar *command* nil)
 (defvar *echo-buffer* nil)
 (defvar *completion-p* nil)
@@ -16,6 +20,7 @@
 (defvar *completion-end-point* nil)
 (defvar *completion-timer* nil)
 (defvar *completion-timeout* 200)
+(defvar *default-bash-init-file-content* "PS1='$ '")
 
 (defvar *assert* nil)
 
@@ -128,8 +133,25 @@
                    *command* nil)
              (complete/insert rest))))))
 
+(defun setup-bash-command ()
+  (let* ((init-dir (merge-pathnames ".lem/" (user-homedir-pathname)))
+         (init-file (merge-pathnames "run-bashrc" init-dir)))
+    (if (null (cl-fad:file-exists-p init-dir))
+        (list *shell-name* "--norc")
+        (progn
+          (unless (cl-fad:file-exists-p init-file)
+            (with-open-file (st init-file :direction :output)
+              (write-line *default-bash-init-file-content* st)))
+          (list *shell-name* "--rcfile" (namestring init-file))))))
+
 (defun run-shell-internal ()
   (unless (alive-process-p)
+    (or *shell-command*
+        (setf *shell-command*
+              (cond ((string= *shell-name* "bash")
+                     (setf *enable-complete* t)
+                     (setup-bash-command))
+                    (t (list *shell-name*)))))
     (setf *process*
           (lem-process:run-process *shell-command*
                                    :name "run-shell"
@@ -140,8 +162,9 @@
   (run-shell-internal))
 
 (define-command shell-complete  () ()
-  (query-completion (lem.listener-mode::listener-start-point (current-buffer))
-                    (current-point)))
+  (and *enable-complete*
+       (query-completion (lem.listener-mode::listener-start-point (current-buffer))
+                         (current-point))))
 ;;; debug
 (define-command show-shell-complete  () ()
   (let* ((start (lem.listener-mode::listener-start-point (current-buffer)))
