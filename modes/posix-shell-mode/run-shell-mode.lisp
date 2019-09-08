@@ -158,8 +158,6 @@
                    (message (format nil "~a,~a:~a"
                                     (string= *command* echo-string)
                                     *command* echo-string))))
-             (and *completion-p*
-                  (start-timer *completion-timeout* nil #'start-shell-completion))
              (setq *echo-buffer* nil
                    *command* nil)
              (complete/insert rest))))))
