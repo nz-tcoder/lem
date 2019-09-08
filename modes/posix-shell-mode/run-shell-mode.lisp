@@ -109,7 +109,6 @@
   (if (point/= start end)
       (multiple-value-bind (type query-command)
           (make-query-command (points-to-string start end))
-        (push query-command *debug-comp*)
         (setq *command* query-command
               *completion-p* t
               *completion-end-point* end
@@ -136,7 +135,6 @@
 (defun output-callback (string)
   (let ((output (ppcre:regex-replace-all "\\r\\n" string
                                          (string #\newline))))
-    (push output *debug-output*)
     (cond ((and *command* (not (ppcre:scan "\\n" output))) ; buffered
            (push output *echo-buffer*))
           ((null *command*)                                ; command result
