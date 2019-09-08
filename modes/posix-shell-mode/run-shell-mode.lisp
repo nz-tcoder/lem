@@ -1,4 +1,3 @@
-
 (defpackage :lem-run-shell-mode
   (:use :cl :lem)
   (:export :run-shell
@@ -74,30 +73,53 @@
   (setq *command* string))
 
 (defun start-shell-completion ()
-  (let ((items (reverse (cdr *completion-buffer*))))
+  (let ((items (cdr *completion-buffer*))) ; drop prompt
     (if items
         (lem.completion-mode:run-completion
-         #'(lambda (point)
-             (declare (ignore point))
-             (mapcar #'(lambda (completion)
-                         (lem.completion-mode:make-completion-item
-                          :label completion
-                          :detail ""
-                          :start *completion-start-point*
-                          :end *completion-end-point*))
-                     items)))))
-  (setq *completion-p* nil
-        *completion-buffer* nil
-        *completion-timer* nil))
+         (lem.completion-mode:make-completion-spec
+          #'(lambda (point)
+              (declare (ignore point))
+              (mapcar #'(lambda (completion)
+                          (lem.completion-mode:make-completion-item
+                           :label completion
+                           :detail ""
+                           :start *completion-start-point*
+                           :end *completion-end-point*))
+                      items))
+          :prefix-search t)))
+    (setq *completion-p* nil
+          *completion-buffer* nil
+          *completion-timer* nil)))
+
+(defun make-query-command (string)
+  (if (ppcre:scan "\\s" string)
+      (values 'file (format nil "compgen -A file ~@[~a~]"
+                           (unless (ppcre:scan "\\s$" string)
+                             (car (last (ppcre:split "\\s" string))))))
+      (values 'command (format nil "compgen -A command ~a" string))))
+
+(defun skip-to-space (point)
+  (if (eql (character-at point) #\space)
+      point
+      (with-point ((p point))
+        (skip-chars-backward p #'(lambda (x) (not (eql x #\space))))
+        p)))
 
 (defun query-completion (start end)
-  (let ((query-command (format nil "compgen -A command ~a" (points-to-string start end))))
-    (lem-process:process-send-input *process* 
-                                    (concatenate 'string query-command (string #\newline)))
-    (setq *command* query-command
-          *completion-p* t
-          *completion-start-point* start
-          *completion-end-point* end)))
+  (if (point/= start end)
+      (multiple-value-bind (type query-command)
+          (make-query-command (points-to-string start end))
+        (push query-command *debug-comp*)
+        (setq *command* query-command
+              *completion-p* t
+              *completion-end-point* end
+              *completion-start-point*
+              (if (eq type 'command)
+                  start
+                  (skip-to-space end)))
+        (lem-process:process-send-input *process*
+                                        (concatenate 'string query-command
+                                                     (string #\newline))))))
 
 (defun complete/insert (string)
   (if *completion-p*
@@ -114,11 +136,12 @@
 (defun output-callback (string)
   (let ((output (ppcre:regex-replace-all "\\r\\n" string
                                          (string #\newline))))
+    (push output *debug-output*)
     (cond ((and *command* (not (ppcre:scan "\\n" output))) ; buffered
            (push output *echo-buffer*))
-          ((null *command*)  ; command result
+          ((null *command*)                                ; command result
            (complete/insert output))
-          (t           ; the first is command echo
+          (t                                               ; the first is echo
            (ppcre:register-groups-bind (echo rest)
                ("(.*)\\n((?s).*)" output)
              (if *assert*
@@ -165,9 +188,3 @@
   (and *enable-complete*
        (query-completion (lem.listener-mode::listener-start-point (current-buffer))
                          (current-point))))
-;;; debug
-(define-command show-shell-complete  () ()
-  (let* ((start (lem.listener-mode::listener-start-point (current-buffer)))
-         (str (points-to-string start (current-point))))
-    (message (format nil "compgen -A command ~a" str))))
-
