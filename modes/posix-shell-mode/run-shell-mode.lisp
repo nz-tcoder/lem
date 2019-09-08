@@ -23,9 +23,19 @@
 
 (defvar *assert* nil)
 
+(defvar *run-shell-syntax-table*
+  (make-syntax-table
+   :space-chars '(#\space #\tab #\newline)
+   :symbol-chars '(#\+ #\- #\/ #\= #\. #\_ #\% #\:)
+   :paren-pairs '((#\[ . #\])
+                  (#\{ . #\}))
+   :string-quote-chars '(#\" #\')
+   :line-comment-string "#"))
+
 (define-major-mode run-shell-mode ()
     (:name "Run shell"
-     :keymap *run-shell-mode-keymap*)
+     :keymap *run-shell-mode-keymap*
+     :syntax-table *run-shell-syntax-table* )
   (reset-listener-variables (current-buffer))
   (lem.listener-mode:listener-mode t))
 
